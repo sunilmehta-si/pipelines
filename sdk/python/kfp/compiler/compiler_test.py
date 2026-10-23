@@ -2946,6 +2946,39 @@ class TestYamlComments(unittest.TestCase):
             'a: 1\nb: 2\n',
         )
 
+    def test_comments_escape_every_yaml_line_break_in_string_defaults(self):
+        # YAML also ends a comment at NEL and at the Unicode line and
+        # paragraph separators, not only at \n and \r
+        default = 'a\x85b\u2028c\u2029d'
+
+        @dsl.component
+        def echo(config: str) -> str:
+            return config
+
+        @dsl.pipeline()
+        def my_pipeline(config: str = default) -> str:
+            return echo(config=config).output
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pipeline_spec_path = os.path.join(tmpdir, 'output.yaml')
+            compiler.Compiler().compile(
+                pipeline_func=my_pipeline, package_path=pipeline_spec_path
+            )
+
+            with open(pipeline_spec_path, 'r+') as f:
+                yaml_content = f.read()
+
+        self.assertIn(
+            "#    config: str [Default: 'a\\x85b\\u2028c\\u2029d']",
+            yaml_content,
+        )
+        self.assertEqual(
+            yaml.safe_load(yaml_content)['root']['inputDefinitions'][
+                'parameters'
+            ]['config']['defaultValue'],
+            default,
+        )
+
     def test_verbose_comment_characteristics(self):
 
         @dsl.component

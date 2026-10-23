@@ -2777,6 +2777,15 @@ def _merge_pipeline_config(
     return platformSpec
 
 
+_COMMENT_LINE_BREAKS = (
+    ('\r', '\\r'),
+    ('\n', '\\n'),
+    ('\x85', '\\x85'),
+    ('\u2028', '\\u2028'),
+    ('\u2029', '\\u2029'),
+)
+
+
 def extract_comments_from_pipeline_spec(
     pipeline_spec: dict, pipeline_description: str
 ) -> str:
@@ -2811,16 +2820,15 @@ def extract_comments_from_pipeline_spec(
                         parameter_name
                     ]['defaultValue']
                     if isinstance(data['defaultValue'], str):
-                        # The default goes into a `#` comment line: a newline
-                        # inside it would end the comment and leave the rest
-                        # of the value as unparsable YAML.
-                        data['defaultValue'] = (
-                            "'"
-                            + data['defaultValue']
-                            .replace('\r', '\\r')
-                            .replace('\n', '\\n')
-                            + "'"
-                        )
+                        # The default goes into a `#` comment line: a line
+                        # break inside it would end the comment and leave the
+                        # rest of the value as unparsable YAML. YAML also
+                        # treats NEL and the Unicode line and paragraph
+                        # separators as line breaks.
+                        value = data['defaultValue']
+                        for char, escaped in _COMMENT_LINE_BREAKS:
+                            value = value.replace(char, escaped)
+                        data['defaultValue'] = "'" + value + "'"
                 array_of_signatures.append(data)
 
             for artifact_name, artifact_body in signature.get(
